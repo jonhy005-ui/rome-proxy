@@ -1,8 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.security import APIKeyHeader
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import requests
 import re
+import os
+import secrets
 
 app = FastAPI(
     title="ROME ADEM Proxy",
@@ -11,6 +14,38 @@ app = FastAPI(
 
 BASE_URL = "https://rome.adem.etat.lu"
 SEARCH_URL = f"{BASE_URL}/search/"
+
+# --- Sécurité par clé API ---
+#
+# La clé attendue est lue depuis la variable d'environnement ROME_PROXY_API_KEY.
+# Ne jamais mettre la clé en dur dans le code source.
+# TEST: 
+# Exemple de lancement :
+#   export ROME_PROXY_API_KEY="une-longue-chaine-secrete"
+#   uvicorn RomeProxy:app --host 0.0.0.0 --port 8000
+
+API_KEY_NAME = "X-API-Key"
+API_KEY = os.environ.get("ROME_PROXY_API_KEY")
+
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+
+def verify_api_key(provided_key: str = Security(api_key_header)):
+    if not API_KEY:
+        # Si aucune clé n'est configurée côté serveur, on bloque l'accès
+        # plutôt que de laisser l'API ouverte par erreur de configuration.
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfiguration: ROME_PROXY_API_KEY is not set."
+        )
+
+    if not provided_key or not secrets.compare_digest(provided_key, API_KEY):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key."
+        )
+
+    return provided_key
 
 @app.get("/")
 def root():
@@ -21,7 +56,7 @@ def root():
 
 
 @app.get("/categories")
-def get_categories():
+def get_categories(api_key: str = Depends(verify_api_key)):
     try:
         response = requests.get(
             f"{BASE_URL}/index_metier.html",
@@ -57,7 +92,7 @@ def get_categories():
 
 
 @app.get("/search")
-def search(q: str, page: int = 1):
+def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
 
     try:
 
@@ -234,7 +269,7 @@ def search(q: str, page: int = 1):
                 
         
 @app.get("/job/{rome_code}")
-def get_job(rome_code: str):
+def get_job(rome_code: str, api_key: str = Depends(verify_api_key)):
 
     try:
 
@@ -333,7 +368,7 @@ def get_job(rome_code: str):
         
         
 @app.get("/job/{rome_code}/skills")
-def get_job_skills(rome_code: str):
+def get_job_skills(rome_code: str, api_key: str = Depends(verify_api_key)):
 
     try:
 
