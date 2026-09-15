@@ -40,6 +40,10 @@
             color: white;
             border: none;
             border-radius: 4px;
+            transition: background-color 0.15s ease-in-out;
+        }
+        button:hover {
+            background-color: #0069d9;
         }
         button:disabled {
             background-color: #6c757d;
@@ -73,6 +77,48 @@
             min-height: 100px;
             background-color: white;
         }
+        .rome-details {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .rome-code {
+            color: #007bff;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+        .section {
+            margin-bottom: 15px;
+        }
+        .section-title {
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        .tag {
+            background-color: #e9ecef;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+        .examples-list {
+            columns: 2;
+            list-style-type: none;
+            padding: 0;
+        }
+        .examples-list li {
+            padding: 5px 0;
+            break-inside: avoid;
+        }
         .error {
             color: #dc3545;
             background-color: #f8d7da;
@@ -83,6 +129,15 @@
             color: #6c757d;
             font-style: italic;
         }
+        .skills-list {
+            columns: 3;
+            list-style-type: none;
+            padding: 0;
+        }
+        .skills-list li {
+            padding: 5px 0;
+            break-inside: avoid;
+        }
     </style>
 </head>
 <body>
@@ -90,7 +145,7 @@
 
     <div class="api-key-container">
         <label for="apiKeyInput"><strong>Clé API:</strong></label>
-        <input type="password" id="apiKeyInput" placeholder="Votre clé API" style="width: 100%; margin-top: 8px;">
+        <input type="password" id="apiKeyInput" placeholder="Votre clé API">
     </div>
 
     <div class="search-container">
@@ -102,35 +157,39 @@
     <div id="results"></div>
 
     <script>
-        const API_BASE_URL = ''; 
-        //const API_BASE_URL = 'http://localhost:8000'; 
+        // URL WS
+          const API_BASE_URL = 'https://rome-proxy.onrender.com'; 
+       // const API_BASE_URL = 'http://localhost:8000'; 
 
-        // Chargement de la clé API sauvegardée
+        // Gestion de la clé API
         document.addEventListener('DOMContentLoaded', () => {
             const savedKey = localStorage.getItem('romeProxyApiKey');
             if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
         });
 
-        // Sauvegarde de la clé API
         document.getElementById('apiKeyInput').addEventListener('input', (e) => {
             localStorage.setItem('romeProxyApiKey', e.target.value);
         });
 
-        // Fonction générique pour les requêtes API
+        // Fonction de requête avec gestion CORS renforcée
         async function apiRequest(endpoint, params = {}) {
             const apiKey = document.getElementById('apiKeyInput').value;
             if (!apiKey) throw new Error("Clé API manquante");
 
-            const url = new URL(`${API_BASE_URL}${endpoint}`);
-            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+            const url = new URL(endpoint, API_BASE_URL);
+            Object.entries(params).forEach(([key, value]) => {
+                url.searchParams.append(key, value);
+            });
 
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
                     'X-API-Key': apiKey,
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'Origin': window.location.origin
                 },
-                mode: 'cors'
+                mode: 'cors',
+                credentials: 'omit'
             });
 
             if (!response.ok) {
@@ -144,15 +203,10 @@
         // Recherche
         document.getElementById('searchButton').addEventListener('click', async () => {
             const query = document.getElementById('searchInput').value.trim();
-            const button = document.getElementById('searchButton');
-
-            if (query.length < 2) {
-                alert("Minimum 2 caractères requis");
-                return;
-            }
+            if (query.length < 2) return alert("Minimum 2 caractères");
 
             try {
-                button.disabled = true;
+                document.getElementById('searchButton').disabled = true;
                 document.getElementById('results').innerHTML = '<p class="loading">Recherche en cours...</p>';
 
                 const data = await apiRequest('/search', { q: query, page: 1 });
@@ -161,16 +215,16 @@
                 document.getElementById('results').innerHTML =
                     `<p class="error">Erreur: ${error.message}</p>`;
             } finally {
-                button.disabled = false;
+                document.getElementById('searchButton').disabled = false;
             }
         });
 
-        // Affichage des résultats
+        // Affichage des résultats de recherche
         function displayResults(results) {
             const container = document.getElementById('suggestions');
             container.innerHTML = '';
 
-            if (!results.length) {
+            if (!results || results.length === 0) {
                 document.getElementById('results').innerHTML =
                     '<p class="loading">Aucun résultat trouvé</p>';
                 return;
@@ -180,7 +234,7 @@
                 const div = document.createElement('div');
                 div.className = 'suggestion-item';
                 div.innerHTML = `
-                    <strong>${item.rome_code}</strong> - ${item.title}
+                    <strong>${item.rome_code || ''}</strong> - ${item.title || ''}
                     ${item.main_type ? `<br><small>${item.main_type}</small>` : ''}
                 `;
                 div.onclick = () => selectItem(item);
@@ -190,23 +244,76 @@
             container.style.display = 'block';
         }
 
-        // Sélection d'un item
+        // Sélection d'un item avec toutes les informations
         function selectItem(item) {
             document.getElementById('suggestions').style.display = 'none';
             document.getElementById('searchInput').value = item.title;
 
             const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = `
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
-                    <h3>${item.rome_code} - ${item.title}</h3>
-                    <button id="viewSkills" style="margin-top: 10px;">Voir les compétences</button>
+
+            // Création de la carte détaillée avec toutes les informations
+            let htmlContent = `
+                <div class="rome-details">
+                    <div class="rome-code">${item.rome_code} - ${item.title}</div>
+            `;
+
+            // Section Types
+            if (item.types && item.types.length > 0) {
+                htmlContent += `
+                    <div class="section">
+                        <div class="section-title">Types:</div>
+                        <div class="tags">
+                            ${item.types.map(type => `<span class="tag">${type}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Section Catégorie
+            if (item.category) {
+                htmlContent += `
+                    <div class="section">
+                        <div class="section-title">Catégorie:</div>
+                        <p>${item.category}</p>
+                    </div>
+                `;
+            }
+
+            // Section Description
+            if (item.description) {
+                htmlContent += `
+                    <div class="section">
+                        <div class="section-title">Description:</div>
+                        <p>${item.description}</p>
+                    </div>
+                `;
+            }
+
+            // Section Exemples
+            if (item.examples && item.examples.length > 0) {
+                htmlContent += `
+                    <div class="section">
+                        <div class="section-title">Exemples d'appellations:</div>
+                        <ul class="examples-list">
+                            ${item.examples.map(example => `<li>${example}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            // Bouton pour voir les compétences
+            htmlContent += `
+                    <button id="viewSkills" style="margin-top: 15px;">Voir les compétences</button>
                 </div>
             `;
 
+            resultsDiv.innerHTML = htmlContent;
+
+            // Ajout de l'événement pour le bouton
             document.getElementById('viewSkills').onclick = async () => {
                 try {
-                    resultsDiv.innerHTML += '<p class="loading">Chargement...</p>';
-                    const skillsData = await apiRequest(`/job/${item.rome_code}/skills`);
+                    resultsDiv.innerHTML += '<p class="loading">Chargement des compétences...</p>';
+                    const skillsData = await apiRequest(`/job/${encodeURIComponent(item.rome_code)}/skills`);
                     displaySkills(skillsData);
                 } catch (error) {
                     resultsDiv.innerHTML += `<p class="error">Erreur: ${error.message}</p>`;
@@ -214,26 +321,37 @@
             };
         }
 
-        // Affichage des compétences
+        // Affichage des compétences (inchangé)
         function displaySkills(data) {
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = `
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                <div class="rome-details">
                     <h2>${data.title} (${data.rome_code})</h2>
-                    <p><strong>Compétences:</strong> ${data.skills_count}</p>
-                </div>
-
-                ${data.job_titles.length ?
-                    `<div>
-                        <h3>Appellations:</h3>
-                        <ul style="columns: 2;">${data.job_titles.map(t => `<li>${t}</li>`).join('')}</ul>
-                    </div>` : ''}
-
-                <div>
-                    <h3>Compétences:</h3>
-                    <ul style="columns: 3;">${data.skills.map(s => `<li>${s}</li>`).join('')}</ul>
+                    <p><strong>Nombre de compétences:</strong> ${data.skills_count || 0}</p>
                 </div>
             `;
+
+            if (data.job_titles && data.job_titles.length > 0) {
+                resultsDiv.innerHTML += `
+                    <div class="section">
+                        <h3>Exemples d'appellations (${data.job_titles.length}):</h3>
+                        <ul class="examples-list">
+                            ${data.job_titles.map(title => `<li>${title}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            if (data.skills && data.skills.length > 0) {
+                resultsDiv.innerHTML += `
+                    <div class="section">
+                        <h3>Compétences:</h3>
+                        <ul class="skills-list">
+                            ${data.skills.map(skill => `<li>${skill}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
         }
 
         // Fermeture des suggestions
