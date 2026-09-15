@@ -15,26 +15,33 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+# Configuration CORS étendue pour Render
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Remplacez par vos domaines en production
+    allow_origins=["*"],  # Ou spécifiez votre domaine frontend
     allow_credentials=True,
-    allow_methods=["GET", "OPTIONS"],  # Explicite pour éviter les 405
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["X-API-Key", "Content-Type"],
 )
 
-# Gestion manuelle des OPTIONS pour les routes avec query params
+# Gestion explicite des requêtes OPTIONS pour les routes avec paramètres
 @app.options("/search")
 @app.options("/search/")
+@app.options("/job/{rome_code}")
+@app.options("/job/{rome_code}/")
 @app.options("/job/{rome_code}/skills")
 async def handle_options(request: Request):
     return JSONResponse(
         content={},
         headers={
+            "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, OPTIONS",
             "Access-Control-Allow-Headers": "X-API-Key, Content-Type",
+            "Access-Control-Max-Age": "86400",
         }
     )
+
 BASE_URL = "https://rome.adem.etat.lu"
 SEARCH_URL = f"{BASE_URL}/search/"
 
