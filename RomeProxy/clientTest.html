@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recherche ROME ADEM</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .api-key-container {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .search-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #apiKeyInput, #searchInput {
+            flex: 1;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        #suggestions {
+            display: none;
+            position: absolute;
+            width: calc(100% - 40px);
+            max-height: 400px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        .suggestion-item {
+            padding: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        .suggestion-item:hover {
+            background-color: #f8f9fa;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            min-height: 100px;
+            background-color: white;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .loading {
+            color: #6c757d;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>Recherche ROME ADEM</h1>
+
+    <div class="api-key-container">
+        <label for="apiKeyInput"><strong>Clé API:</strong></label>
+        <input type="password" id="apiKeyInput" placeholder="Votre clé API" style="width: 100%; margin-top: 8px;">
+    </div>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Rechercher un métier...">
+        <button id="searchButton">Rechercher</button>
+    </div>
+
+    <div id="suggestions"></div>
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = ''; 
+        //const API_BASE_URL = 'http://localhost:8000'; 
+
+        // Chargement de la clé API sauvegardée
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('romeProxyApiKey');
+            if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+        });
+
+        // Sauvegarde de la clé API
+        document.getElementById('apiKeyInput').addEventListener('input', (e) => {
+            localStorage.setItem('romeProxyApiKey', e.target.value);
+        });
+
+        // Fonction générique pour les requêtes API
+        async function apiRequest(endpoint, params = {}) {
+            const apiKey = document.getElementById('apiKeyInput').value;
+            if (!apiKey) throw new Error("Clé API manquante");
+
+            const url = new URL(`${API_BASE_URL}${endpoint}`);
+            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-API-Key': apiKey,
+                    'Accept': 'application/json'
+                },
+                mode: 'cors'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || `Erreur ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+        // Recherche
+        document.getElementById('searchButton').addEventListener('click', async () => {
+            const query = document.getElementById('searchInput').value.trim();
+            const button = document.getElementById('searchButton');
+
+            if (query.length < 2) {
+                alert("Minimum 2 caractères requis");
+                return;
+            }
+
+            try {
+                button.disabled = true;
+                document.getElementById('results').innerHTML = '<p class="loading">Recherche en cours...</p>';
+
+                const data = await apiRequest('/search', { q: query, page: 1 });
+                displayResults(data.results);
+            } catch (error) {
+                document.getElementById('results').innerHTML =
+                    `<p class="error">Erreur: ${error.message}</p>`;
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        // Affichage des résultats
+        function displayResults(results) {
+            const container = document.getElementById('suggestions');
+            container.innerHTML = '';
+
+            if (!results.length) {
+                document.getElementById('results').innerHTML =
+                    '<p class="loading">Aucun résultat trouvé</p>';
+                return;
+            }
+
+            results.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.innerHTML = `
+                    <strong>${item.rome_code}</strong> - ${item.title}
+                    ${item.main_type ? `<br><small>${item.main_type}</small>` : ''}
+                `;
+                div.onclick = () => selectItem(item);
+                container.appendChild(div);
+            });
+
+            container.style.display = 'block';
+        }
+
+        // Sélection d'un item
+        function selectItem(item) {
+            document.getElementById('suggestions').style.display = 'none';
+            document.getElementById('searchInput').value = item.title;
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                    <h3>${item.rome_code} - ${item.title}</h3>
+                    <button id="viewSkills" style="margin-top: 10px;">Voir les compétences</button>
+                </div>
+            `;
+
+            document.getElementById('viewSkills').onclick = async () => {
+                try {
+                    resultsDiv.innerHTML += '<p class="loading">Chargement...</p>';
+                    const skillsData = await apiRequest(`/job/${item.rome_code}/skills`);
+                    displaySkills(skillsData);
+                } catch (error) {
+                    resultsDiv.innerHTML += `<p class="error">Erreur: ${error.message}</p>`;
+                }
+            };
+        }
+
+        // Affichage des compétences
+        function displaySkills(data) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                    <h2>${data.title} (${data.rome_code})</h2>
+                    <p><strong>Compétences:</strong> ${data.skills_count}</p>
+                </div>
+
+                ${data.job_titles.length ?
+                    `<div>
+                        <h3>Appellations:</h3>
+                        <ul style="columns: 2;">${data.job_titles.map(t => `<li>${t}</li>`).join('')}</ul>
+                    </div>` : ''}
+
+                <div>
+                    <h3>Compétences:</h3>
+                    <ul style="columns: 3;">${data.skills.map(s => `<li>${s}</li>`).join('')}</ul>
+                </div>
+            `;
+        }
+
+        // Fermeture des suggestions
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#searchInput') && !e.target.closest('#searchButton')) {
+                document.getElementById('suggestions').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

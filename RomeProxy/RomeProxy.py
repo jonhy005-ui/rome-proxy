@@ -1,5 +1,8 @@
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security import APIKeyHeader
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import requests
@@ -12,6 +15,26 @@ app = FastAPI(
     version="1.0.0"
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Remplacez par vos domaines en production
+    allow_credentials=True,
+    allow_methods=["GET", "OPTIONS"],  # Explicite pour éviter les 405
+    allow_headers=["X-API-Key", "Content-Type"],
+)
+
+# Gestion manuelle des OPTIONS pour les routes avec query params
+@app.options("/search")
+@app.options("/search/")
+@app.options("/job/{rome_code}/skills")
+async def handle_options(request: Request):
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "X-API-Key, Content-Type",
+        }
+    )
 BASE_URL = "https://rome.adem.etat.lu"
 SEARCH_URL = f"{BASE_URL}/search/"
 
