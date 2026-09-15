@@ -19,7 +19,7 @@ SEARCH_URL = f"{BASE_URL}/search/"
 #
 # La clé attendue est lue depuis la variable d'environnement ROME_PROXY_API_KEY.
 # Ne jamais mettre la clé en dur dans le code source.
-# TEST: 
+#
 # Exemple de lancement :
 #   export ROME_PROXY_API_KEY="une-longue-chaine-secrete"
 #   uvicorn RomeProxy:app --host 0.0.0.0 --port 8000
@@ -29,6 +29,15 @@ API_KEY = os.environ.get("ROME_PROXY_API_KEY")
 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
+def clean_text(text):
+    """Nettoie une chaîne en supprimant espaces/saut de ligne superflus."""
+    if not text:
+        return None
+    # Remplace les sauts de ligne/tabulations par un espace, puis nettoie
+    text = re.sub(r'[\n\t\r]+', ' ', str(text))
+    # Supprime les espaces multiples et les espaces en début/fin
+    text = ' '.join(text.split()).strip()
+    return text if text else None
 
 def verify_api_key(provided_key: str = Security(api_key_header)):
     if not API_KEY:
@@ -54,7 +63,6 @@ def root():
         "status": "running"
     }
 
-
 @app.get("/categories")
 def get_categories(api_key: str = Depends(verify_api_key)):
     try:
@@ -62,7 +70,7 @@ def get_categories(api_key: str = Depends(verify_api_key)):
             f"{BASE_URL}/index_metier.html",
             timeout=20
         )
-      
+
         response.raise_for_status()
         html = response.content.decode("utf-8", errors="replace")
         soup = BeautifulSoup(html, "html.parser")
@@ -75,7 +83,7 @@ def get_categories(api_key: str = Depends(verify_api_key)):
 
             if href and "fiches_rome" in href:
                 results.append({
-                    "name": label,
+                    "name": clean_text(label),
                     "url": href
                 })
 
@@ -89,7 +97,6 @@ def get_categories(api_key: str = Depends(verify_api_key)):
             status_code=500,
             detail=str(ex)
         )
-
 
 @app.get("/search")
 def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
@@ -106,6 +113,7 @@ def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
             },
             timeout=30
         )
+
 
         response.raise_for_status()
         html = response.content.decode("utf-8", errors="replace")
@@ -165,8 +173,7 @@ def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
             if type_node:
 
                 types = [
-                    x.strip()
-                    for x in type_node.get_text(
+                    clean_text(x) for x in type_node.get_text(
                         " ",
                         strip=True
                     ).split(",")
@@ -188,10 +195,10 @@ def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
                 if strong:
                     strong.extract()
 
-                category = category_node.get_text(
+                category = clean_text(category_node.get_text(
                     " ",
                     strip=True
-                )
+                ))
 
             description = None
 
@@ -201,10 +208,10 @@ def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
 
             if description_node:
 
-                description = description_node.get_text(
+                description = clean_text(description_node.get_text(
                     " ",
                     strip=True
-                )
+                ))
 
             examples = []
 
@@ -227,16 +234,15 @@ def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
                 )
 
                 examples = [
-                    x.strip()
-                    for x in examples_text.split(",")
+                    clean_text(x) for x in examples_text.split(",")
                     if x.strip()
                 ]
 
             results.append(
                 {
                     "id": hit_id,
-                    "rome_code": code,
-                    "title": title,
+                    "rome_code": clean_text(code),
+                    "title": clean_text(title),
                     "url": url,
                     "types": types,
                     "main_type": (
@@ -254,7 +260,7 @@ def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
             )
 
         return {
-            "query": q,
+            "query": clean_text(q),
             "page": page,
             "count": len(results),
             "results": results
@@ -266,8 +272,7 @@ def search(q: str, page: int = 1, api_key: str = Depends(verify_api_key)):
             status_code=500,
             detail=str(ex)
         )
-                
-        
+
 @app.get("/job/{rome_code}")
 def get_job(rome_code: str, api_key: str = Depends(verify_api_key)):
 
@@ -292,10 +297,10 @@ def get_job(rome_code: str, api_key: str = Depends(verify_api_key)):
         header = soup.find(["h1", "h2"])
 
         if header:
-            title = header.get_text(
+            title = clean_text(header.get_text(
                 " ",
                 strip=True
-            )
+            ))
 
         sections = {}
 
@@ -312,10 +317,10 @@ def get_job(rome_code: str, api_key: str = Depends(verify_api_key)):
                 "h4"
             ]:
 
-                current_section = node.get_text(
+                current_section = clean_text(node.get_text(
                     " ",
                     strip=True
-                )
+                ))
 
                 sections[current_section] = []
 
@@ -326,10 +331,10 @@ def get_job(rome_code: str, api_key: str = Depends(verify_api_key)):
 
             if node.name == "p":
 
-                text = node.get_text(
+                text = clean_text(node.get_text(
                     " ",
                     strip=True
-                )
+                ))
 
                 if text:
 
@@ -341,10 +346,10 @@ def get_job(rome_code: str, api_key: str = Depends(verify_api_key)):
 
                 for li in node.find_all("li"):
 
-                    text = li.get_text(
+                    text = clean_text(li.get_text(
                         " ",
                         strip=True
-                    )
+                    ))
 
                     if text:
 
@@ -353,7 +358,7 @@ def get_job(rome_code: str, api_key: str = Depends(verify_api_key)):
                         )
 
         return {
-            "rome_code": rome_code,
+            "rome_code": clean_text(rome_code),
             "title": title,
             "source_url": url,
             "sections": sections
@@ -365,8 +370,7 @@ def get_job(rome_code: str, api_key: str = Depends(verify_api_key)):
             status_code=500,
             detail=str(ex)
         )
-        
-        
+
 @app.get("/job/{rome_code}/skills")
 def get_job_skills(rome_code: str, api_key: str = Depends(verify_api_key)):
 
@@ -391,10 +395,10 @@ def get_job_skills(rome_code: str, api_key: str = Depends(verify_api_key)):
         title_tag = soup.find(["h1", "h2"])
 
         if title_tag:
-            title = title_tag.get_text(
+            title = clean_text(title_tag.get_text(
                 " ",
                 strip=True
-            )
+            ))
 
         skills = set()
         job_titles = set()
@@ -402,10 +406,10 @@ def get_job_skills(rome_code: str, api_key: str = Depends(verify_api_key)):
         # Extraction de toutes les listes de la fiche
         for li in soup.find_all("li"):
 
-            text = li.get_text(
+            text = clean_text(li.get_text(
                 " ",
                 strip=True
-            )
+            ))
 
             if text and len(text) > 3:
                 skills.add(text)
@@ -421,10 +425,10 @@ def get_job_skills(rome_code: str, api_key: str = Depends(verify_api_key)):
 
             if parent:
 
-                text = parent.get_text(
+                text = clean_text(parent.get_text(
                     " ",
                     strip=True
-                )
+                ))
 
                 text = text.replace(
                     "Exemples d'appellations :",
@@ -432,14 +436,12 @@ def get_job_skills(rome_code: str, api_key: str = Depends(verify_api_key)):
                 )
 
                 for item in text.split(","):
-
-                    item = item.strip()
-
+                    item = clean_text(item)
                     if item:
                         job_titles.add(item)
 
         return {
-            "rome_code": rome_code,
+            "rome_code": clean_text(rome_code),
             "title": title,
             "url": url,
             "skills_count": len(skills),
