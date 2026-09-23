@@ -1,0 +1,1 @@
+pyinstaller --onefile --name RomeProxy --collect-submodules uvicorn mainexe.py

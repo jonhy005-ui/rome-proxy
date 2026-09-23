@@ -129,14 +129,11 @@
             color: #6c757d;
             font-style: italic;
         }
-        .skills-list {
-            columns: 3;
-            list-style-type: none;
-            padding: 0;
-        }
-        .skills-list li {
-            padding: 5px 0;
-            break-inside: avoid;
+        .info-icon {
+            cursor: help;
+            color: #007bff;
+            margin-left: 4px;
+            font-size: 0.9em;
         }
     </style>
 </head>
@@ -158,8 +155,19 @@
 
     <script>
         // URL WS
-          const API_BASE_URL = 'https://rome-proxy.onrender.com'; 
-       // const API_BASE_URL = 'http://localhost:8000'; 
+        //  const API_BASE_URL = 'https://rome-proxy.onrender.com'; 
+        const API_BASE_URL = 'http://localhost:8000'; 
+
+        // Échappement basique pour éviter de casser le HTML / les attributs (ex: title="...")
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
 
         // Gestion de la clé API
         document.addEventListener('DOMContentLoaded', () => {
@@ -301,56 +309,53 @@
                 `;
             }
 
-            // Bouton pour voir les compétences
+            // Bouton pour voir les appellations
             htmlContent += `
-                    <button id="viewSkills" style="margin-top: 15px;">Voir les compétences</button>
+                    <button id="viewAppellations" style="margin-top: 15px;">Voir les appellations</button>
                 </div>
             `;
 
             resultsDiv.innerHTML = htmlContent;
 
             // Ajout de l'événement pour le bouton
-            document.getElementById('viewSkills').onclick = async () => {
+            document.getElementById('viewAppellations').onclick = async () => {
                 try {
-                    resultsDiv.innerHTML += '<p class="loading">Chargement des compétences...</p>';
-                    const skillsData = await apiRequest(`/job/${encodeURIComponent(item.rome_code)}/skills`);
-                    displaySkills(skillsData);
+                    resultsDiv.innerHTML += '<p class="loading">Chargement des appellations...</p>';
+                    const appellationsData = await apiRequest(`/job/${encodeURIComponent(item.rome_code)}/appellations`);
+                    displayAppellations(appellationsData);
                 } catch (error) {
                     resultsDiv.innerHTML += `<p class="error">Erreur: ${error.message}</p>`;
                 }
             };
         }
 
-        // Affichage des compétences (inchangé)
-        function displaySkills(data) {
+        // Affichage des appellations
+        function displayAppellations(data) {
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = `
                 <div class="rome-details">
                     <h2>${data.title} (${data.rome_code})</h2>
-                    <p><strong>Nombre de compétences:</strong> ${data.skills_count || 0}</p>
+                    <p><strong>Nombre d'appellations:</strong> ${data.appellations_count || 0}</p>
                 </div>
             `;
 
-            if (data.job_titles && data.job_titles.length > 0) {
+            if (data.appellations && data.appellations.length > 0) {
                 resultsDiv.innerHTML += `
                     <div class="section">
-                        <h3>Exemples d'appellations (${data.job_titles.length}):</h3>
+                        <h3>Appellations (${data.appellations.length}):</h3>
                         <ul class="examples-list">
-                            ${data.job_titles.map(title => `<li>${title}</li>`).join('')}
+                            ${data.appellations.map(a => {
+                                const idPrefix = a.id ? `<strong>${escapeHtml(a.id)}</strong> - ` : '';
+                                const tooltipIcon = a.tooltip
+                                    ? ` <span class="info-icon" title="${escapeHtml(a.tooltip)}">ⓘ</span>`
+                                    : '';
+                                return `<li>${idPrefix}${escapeHtml(a.label || '')}${tooltipIcon}</li>`;
+                            }).join('')}
                         </ul>
                     </div>
                 `;
-            }
-
-            if (data.skills && data.skills.length > 0) {
-                resultsDiv.innerHTML += `
-                    <div class="section">
-                        <h3>Compétences:</h3>
-                        <ul class="skills-list">
-                            ${data.skills.map(skill => `<li>${skill}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
+            } else {
+                resultsDiv.innerHTML += `<p class="loading">Aucune appellation trouvée pour cette fiche.</p>`;
             }
         }
 
