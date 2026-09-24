@@ -1,1 +1,2 @@
+cd C:\Users\JYE386\git\repository\RomeProxy\
 pyinstaller --onefile --name RomeProxy --collect-submodules uvicorn mainexe.py

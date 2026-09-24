@@ -309,15 +309,21 @@
                 `;
             }
 
-            // Bouton pour voir les appellations
+            // Boutons pour voir les appellations et les activités/compétences
             htmlContent += `
-                    <button id="viewAppellations" style="margin-top: 15px;">Voir les appellations</button>
+                    <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button id="viewAppellations">Voir les appellations</button>
+                        <button id="viewActivitesBase">Activités de base</button>
+                        <button id="viewCompetencesBase">Compétences de base</button>
+                        <button id="viewActivitesSpecifiques">Activités spécifiques</button>
+                        <button id="viewCompetencesSpecifiques">Compétences spécifiques</button>
+                    </div>
                 </div>
             `;
 
             resultsDiv.innerHTML = htmlContent;
 
-            // Ajout de l'événement pour le bouton
+            // Ajout de l'événement pour le bouton appellations
             document.getElementById('viewAppellations').onclick = async () => {
                 try {
                     resultsDiv.innerHTML += '<p class="loading">Chargement des appellations...</p>';
@@ -327,6 +333,26 @@
                     resultsDiv.innerHTML += `<p class="error">Erreur: ${error.message}</p>`;
                 }
             };
+
+            // Boutons activités/compétences (base et spécifiques) : même logique, endpoint et titre différents
+            const activitesCompetencesButtons = [
+                { id: 'viewActivitesBase', endpoint: 'activites-base', label: 'Activités de base' },
+                { id: 'viewCompetencesBase', endpoint: 'competences-base', label: 'Compétences de base' },
+                { id: 'viewActivitesSpecifiques', endpoint: 'activites-specifiques', label: 'Activités spécifiques' },
+                { id: 'viewCompetencesSpecifiques', endpoint: 'competences-specifiques', label: 'Compétences spécifiques' }
+            ];
+
+            activitesCompetencesButtons.forEach(btn => {
+                document.getElementById(btn.id).onclick = async () => {
+                    try {
+                        resultsDiv.innerHTML += `<p class="loading">Chargement (${btn.label})...</p>`;
+                        const data = await apiRequest(`/job/${encodeURIComponent(item.rome_code)}/${btn.endpoint}`);
+                        displayItemsList(data, btn.label);
+                    } catch (error) {
+                        resultsDiv.innerHTML += `<p class="error">Erreur: ${error.message}</p>`;
+                    }
+                };
+            });
         }
 
         // Affichage des appellations
@@ -356,6 +382,51 @@
                 `;
             } else {
                 resultsDiv.innerHTML += `<p class="loading">Aucune appellation trouvée pour cette fiche.</p>`;
+            }
+        }
+
+        // Affichage générique pour les activités/compétences (base et spécifiques)
+        // data.items est une liste de { context: string|null, label: string }
+        function displayItemsList(data, heading) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div class="rome-details">
+                    <h2>${data.title} (${data.rome_code})</h2>
+                    <p><strong>${heading} :</strong> ${data.count || 0}</p>
+                </div>
+            `;
+
+            if (data.items && data.items.length > 0) {
+
+                // Regroupement par contexte (ex: "Intervenir dans un domaine informatique :")
+                // afin de refléter les sous-groupes de la fiche ROME, le cas échéant
+                const groups = new Map();
+                data.items.forEach(it => {
+                    const key = it.context || '';
+                    if (!groups.has(key)) groups.set(key, []);
+                    groups.get(key).push(it.label);
+                });
+
+                let itemsHtml = '';
+                groups.forEach((labels, context) => {
+                    if (context) {
+                        itemsHtml += `<div class="section-title" style="margin-top: 10px;">${escapeHtml(context)}</div>`;
+                    }
+                    itemsHtml += `
+                        <ul class="examples-list">
+                            ${labels.map(l => `<li>${escapeHtml(l)}</li>`).join('')}
+                        </ul>
+                    `;
+                });
+
+                resultsDiv.innerHTML += `
+                    <div class="section">
+                        <h3>${heading} (${data.items.length}):</h3>
+                        ${itemsHtml}
+                    </div>
+                `;
+            } else {
+                resultsDiv.innerHTML += `<p class="loading">Aucun élément trouvé pour cette catégorie.</p>`;
             }
         }
 
